@@ -14,14 +14,16 @@ Acar et al., 2022の実験を拡張、疑似科学信奉尺度，科学的推論
 ## データの内容
 ```
 /data
-  /Experiment1     - 実験1の加工済み実験データ
-  /Experiment2     - 実験2の加工済み実験データ
+  /Experiment1.csv     - 実験1の加工済み実験データ
+  /Experiment2.csv     - 実験2の加工済み実験データ
+  /row_data1.csv       - 加工前実験1データ
+  /row_data2.csv       - 加工前実験2データ
 /analysis               - データ解析に使用したスクリプト
   /analysis1.Rmd            - 実験1の分析コード
   /analysis2.Rmd            - 実験2の分析コード
 /question              - 実験に使用した質問項目
-  /question1       - 実験1の質問項目
-  /question2       - 実験2の質問項目
+  /question1.xlsx       - 実験1の質問項目
+  /question2.xlsx       - 実験2の質問項目
 ```
 
 
