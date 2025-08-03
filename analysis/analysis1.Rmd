@@ -1,0 +1,365 @@
+---
+title: "analysis1"
+output: html_document
+date: "2024-11-16"
+---
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+#install.packages("pacman")
+library(pacman)
+library("GGally")  #ggpairsはここに収録
+library("ggthemes")
+library(easystats)
+library(ggeffects)
+library(MASS)
+library(lme4)
+library(lavaan)       # 構造方程式モデル用
+library(semPlot)      # パス図用
+library(lavaanPlot)   # パス図生成用
+```
+
+```{r}
+data_Expt <- read.csv("Experiment1.csv", header = T, fileEncoding = "cp932")
+```
+
+```{r}
+data_Expt <- na.omit(data_Expt)
+Expt_table <- data.frame(data_Expt[12], #年齢
+                        data_Expt[13], #性別
+                        data_Expt[14], #最終学歴
+                        data_Expt[15], #個人収入
+                        data_Expt[16] #世帯収入
+                        )
+BADE_table <- data.frame()
+BADE_table <- data_Expt[,29:172]
+
+#年齢の平均値と標準偏差を求める
+age_ave <- mean(data_Expt[, 12])
+age_sd <- sqrt(var(data_Expt[, 12]))
+
+#各性別の人数を求める
+man <- sum(data_Expt[, 13] == 1)
+woman <- sum(data_Expt[, 13] == 2)
+other <- sum(data_Expt[, 13] == 3) #その他
+```
+
+#BADE：シナリオ全体の各項目の平均を求める 1回目の解釈
+```{r}
+#シナリオ全体の各項目の平均を求める 1回目の解釈
+sum_12 <- numeric(nrow(BADE_table))  # ベクトルとして初期化
+mean_12 <- numeric(nrow(BADE_table)) # ベクトルとして初期化
+
+#NL1
+column_indices <- seq(1, ncol(BADE_table), by = 12)
+sum_12 <- numeric(nrow(BADE_table))  # ベクトルとして初期化
+mean_12 <- numeric(nrow(BADE_table)) # ベクトルとして初期化
+for (i in 1:nrow(BADE_table)) {
+  selected_values <- BADE_table[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE_table$mean_NL1 <- (mean_12)
+
+#EL1
+column_indices <- seq(2, ncol(BADE_table), by = 12)
+for (i in 1:nrow(BADE_table)) {
+  selected_values <- BADE_table[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE_table$mean_EL1 <- (mean_12)
+
+# Absurd1
+column_indices <- seq(3, ncol(BADE_table), by = 12)
+for (i in 1:nrow(BADE_table)) {
+  selected_values <- BADE_table[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE_table$mean_Ab1 <- (mean_12)
+
+#Truth1
+column_indices <- seq(4, ncol(BADE_table), by = 12)
+for (i in 1:nrow(BADE_table)) {
+  selected_values <- BADE_table[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE_table$mean_Tr1 <- (mean_12)
+
+
+#シナリオ全体の各項目の平均を求める 2回目の解釈
+sum_12 <- numeric(nrow(BADE_table))  # ベクトルとして初期化
+mean_12 <- numeric(nrow(BADE_table)) # ベクトルとして初期化
+
+#NL2
+column_indices <- seq(5, ncol(BADE_table), by = 12)
+
+for (i in 1:nrow(BADE_table)) {
+  selected_values <- BADE_table[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE_table$mean_NL2 <- (mean_12)
+
+#EL2
+column_indices <- seq(6, ncol(BADE_table), by = 12)
+for (i in 1:nrow(BADE_table)) {
+  selected_values <- BADE_table[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE_table$mean_EL2 <- (mean_12)
+
+# Absurd2
+column_indices <- seq(7, ncol(BADE_table), by = 12)
+for (i in 1:nrow(BADE_table)) {
+  selected_values <- BADE_table[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE_table$mean_Ab2 <- (mean_12)
+
+#Truth2
+column_indices <- seq(8, ncol(BADE_table), by = 12)
+for (i in 1:nrow(BADE_table)) {
+  selected_values <- BADE_table[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE_table$mean_Tr2 <- (mean_12)
+
+
+#シナリオ全体の各項目の平均を求める 3回目の解釈
+#NL3
+column_indices <- seq(9, ncol(BADE_table), by = 12)
+sum_12 <- numeric(nrow(BADE_table))  # ベクトルとして初期化
+mean_12 <- numeric(nrow(BADE_table)) # ベクトルとして初期化
+for (i in 1:nrow(BADE_table)) {
+  selected_values <- BADE_table[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE_table$mean_NL3 <- (mean_12)
+
+#EL3
+column_indices <- seq(10, ncol(BADE_table), by = 12)
+for (i in 1:nrow(BADE_table)) {
+  selected_values <- BADE_table[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE_table$mean_EL3 <- (mean_12)
+
+# Absurd3
+column_indices <- seq(11, ncol(BADE_table), by = 12)
+
+for (i in 1:nrow(BADE_table)) {
+  selected_values <- BADE_table[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE_table$mean_Ab3 <- (mean_12)
+
+#Truth3
+column_indices <- seq(12, ncol(BADE_table), by = 12)
+for (i in 1:nrow(BADE_table)) {
+  selected_values <- BADE_table[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE_table$mean_Tr3 <- (mean_12)
+rm(selected_values)
+```
+
+#BADEのスコアリング
+```{r}
+EI <- ((BADE_table$mean_Ab1 + BADE_table$mean_Ab2 + BADE_table$mean_Ab3 + BADE_table$mean_NL3 + BADE_table$mean_EL3) + ((BADE_table$mean_Tr3) * (-1)))
+
+PRB <- (BADE_table$mean_NL1 + BADE_table$mean_NL2 + BADE_table$mean_EL1 + BADE_table$mean_EL2 + BADE_table$mean_Tr1 + BADE_table$mean_Tr2)
+BACE <- ((BADE_table$mean_Tr3) - (BADE_table$mean_Tr1))
+
+BADE_table <- cbind(BADE_table, EI)
+BADE_table <- cbind(BADE_table, PRB)
+BADE_table <- cbind(BADE_table, BACE)
+
+Expt_table <- cbind(Expt_table, EI)
+Expt_table <- cbind(Expt_table, PRB)
+Expt_table <- cbind(Expt_table, BACE)
+```
+
+#疑似科学信奉尺度（項目7だけ逆転項目なので値を反転）
+```{r}
+gizikagaku <- data.frame()
+gizikagaku <- data_Expt[,173:191]
+gizikagaku <- cbind(gizikagaku,  case_when(gizikagaku$疑似科学信奉尺度7 == 1 ~ 5,
+        gizikagaku$疑似科学信奉尺度7 == 2 ~ 4,
+        gizikagaku$疑似科学信奉尺度7 == 3 ~ 3,
+        gizikagaku$疑似科学信奉尺度7 == 4 ~ 2,
+        gizikagaku$疑似科学信奉尺度7 == 5 ~ 1,
+        ))
+colnames(gizikagaku) <- c("疑似科学信奉尺度1", "疑似科学信奉尺度2", "疑似科学信奉尺度3", "疑似科学信奉尺度4", "疑似科学信奉尺度5", "疑似科学信奉尺度6", "疑似科学信奉尺度7", "疑似科学信奉尺度8", "疑似科学信奉尺度9", "疑似科学信奉尺度10", "疑似科学信奉尺度11", "疑似科学信奉尺度12", "疑似科学信奉尺度13", "疑似科学信奉尺度14", "疑似科学信奉尺度15", "疑似科学信奉尺度16", "疑似科学信奉尺度17", "疑似科学信奉尺度18", "疑似科学信奉尺度19", "疑似科学信奉尺度7_逆転")
+
+gizikagaku <- gizikagaku[, -7] #値反転前の部分を差し替え
+gizi_ave <- apply(gizikagaku, 1, mean)#1人当たりの平均
+gizi_hei <- apply(gizikagaku, 2, mean)#各項目の平均
+gizi_sd <- sd(unlist(gizikagaku))
+gizikagaku <- cbind(gizikagaku, gizi_ave)
+Expt_table <- cbind(Expt_table, gizi_ave)
+```
+
+#CMQ-J
+```{r}
+CMQ_table <- data.frame()
+CMQ_table <- data_Expt[,192:196]
+cmq_ave <- apply(CMQ_table, 1, mean)#1人当たりの平均
+cmq_hei <- apply(CMQ_table, 2, mean)#各項目の平均
+cmq_sd <- sd(unlist(CMQ_table))
+CMQ_table <- cbind(CMQ_table, cmq_ave)
+Expt_table <- cbind(Expt_table, cmq_ave)
+```
+
+#科学的推論能力スコア　あっていたら1, 間違っていたら0とする
+```{r}
+suiron_table <- data.frame()
+suiron_table <- data_Expt[,197:208]
+suiron_table <- cbind(suiron_table, suiron_1 = if_else(suiron_table$科学的推論能力1 == 1, 1, 0))
+suiron_table <- cbind(suiron_table, suiron_2 = if_else(suiron_table$科学的推論能力2 == 2, 1, 0))
+suiron_table <- cbind(suiron_table, suiron_3 = if_else(suiron_table$科学的推論能力3 == 1, 1, 0))
+suiron_table <- cbind(suiron_table, suiron_4 = if_else(suiron_table$科学的推論能力4 == 2, 1, 0))
+suiron_table <- cbind(suiron_table, suiron_5 = if_else(suiron_table$科学的推論能力5 == 2, 1, 0))
+suiron_table <- cbind(suiron_table, suiron_6 = if_else(suiron_table$科学的推論能力6 == 2, 1, 0))
+suiron_table <- cbind(suiron_table, suiron_7 = if_else(suiron_table$科学的推論能力7 == 1, 1, 0))
+suiron_table <- cbind(suiron_table, suiron_8 = if_else(suiron_table$科学的推論能力8 == 2, 1, 0))
+suiron_table <- cbind(suiron_table, suiron_9 = if_else(suiron_table$科学的推論能力9 == 1, 1, 0))
+suiron_table <- cbind(suiron_table, suiron_10 = if_else(suiron_table$科学的推論能力10 == 2, 1, 0))
+suiron_table <- cbind(suiron_table, suiron_11 = if_else(suiron_table$科学的推論能力11 == 2, 1, 0))
+suiron_table <- cbind(suiron_table, suiron_12 = if_else(suiron_table$科学的推論能力12 == 2, 1, 0))
+```
+
+#推論能力スコア計算
+```{r}
+suiron_score <- data.frame(suiron_table[, 13:24])
+suiron_ave <- apply(suiron_score, 1, mean)#1人当たりの平均
+suiron_hei <- apply(suiron_score, 2, mean)#各項目の平均
+suiron_sd <- sd(unlist(suiron_score))
+suiron_score <- cbind(suiron_score, suiron_ave) 
+Expt_table <- cbind(Expt_table, suiron_ave)
+```
+
+#被害妄想（値を反転処理）
+```{r}
+higai_table <- data.frame()
+higai_table <- data_Expt[,209:226]
+for(i in 1:18){
+  higai_table <- cbind(higai_table,  case_when(higai_table[, i] == 1 ~ 5,
+        higai_table[, i] == 2 ~ 4,
+        higai_table[, i] == 3 ~ 3,
+        higai_table[, i] == 4 ~ 2,
+        higai_table[, i] == 5 ~ 1,
+        ))
+}
+
+colnames(higai_table) <- c("被害妄想1", "被害妄想2", "被害妄想3", "被害妄想4", "被害妄想5", "被害妄想6", "被害妄想7", "被害妄想8", "被害妄想9", "被害妄想10", "被害妄想11", "被害妄想12", "被害妄想13", "被害妄想14", "被害妄想15", "被害妄想16", "被害妄想17", "被害妄想18", "被害妄想1_逆転", "被害妄想2_逆転", "被害妄想3_逆転", "被害妄想4_逆転", "被害妄想5_逆転", "被害妄想6_逆転", "被害妄想7_逆転", "被害妄想8_逆転", "被害妄想9_逆転", "被害妄想10_逆転", "被害妄想11_逆転", "被害妄想12_逆転", "被害妄想13_逆転", "被害妄想14_逆転", "被害妄想15_逆転", "被害妄想16_逆転", "被害妄想17_逆転", "被害妄想18_逆転")
+
+higai_table <- higai_table[, -(1:18)] #反転処理後のものに値を差し替え
+higai_ave <- apply(higai_table, 1, mean) #1人当たりの平均
+higai_hei <- apply(higai_table, 2, mean)#各項目の平均
+higai_sd <- sd(unlist(higai_table))
+higai_table <- cbind(higai_table, higai_ave)
+Expt_table <- cbind(Expt_table, higai_ave)
+higai_mean <- mean(higai_ave)#全体平均
+```
+
+#CRT あっていたら1, 間違っていたら0とする
+```{r}
+crt_table <- data.frame()
+crt_table <- data_Expt[,227:229]
+crt_table <- cbind(crt_table, crt_1 = if_else(crt_table$CRT1 == 50, 1, 0))
+crt_table <- cbind(crt_table, crt_2 = if_else(crt_table$CRT2 == 5, 1, 0))
+crt_table <- cbind(crt_table, crt_3 = if_else(crt_table$CRT3 == 47, 1, 0))
+```
+
+#CRTスコア計算
+```{r}
+crt_score <- data.frame(crt_table[, 4:6])
+crt_ave <- apply(crt_score, 1, mean)#1人当たりの平均
+crt_hei <- apply(crt_score, 2, mean)#各項目の平均
+crt_sd <- sd(unlist(crt_score))
+crt_score <- cbind(crt_score, crt_ave) 
+Expt_table <- cbind(Expt_table, crt_ave)
+```
+
+#相関分析
+```{r}
+Sanford <- data.frame(Expt_table[, 6], Expt_table[, 7], Expt_table[, 8], Expt_table[, 9], Expt_table[, 10], Expt_table[, 11], Expt_table[, 12], Expt_table[, 13])
+colnames(Sanford)<- c("EI", "PRB", "BACE", "PBS", "CMQ", "SRS", "JPC", "CRT")
+res <-correlation::correlation(Sanford, include_factors = TRUE,  na.rm = TRUE, digits = 3)
+summary(res)
+
+graph <- ggpairs(Sanford)
+p <- Sanford %>% 
+      dplyr::select(EI, PRB, BACE, PBS, CMQ, SRS, JPC, CRT) %>% 
+      ggpairs(lower = list(continuous = wrap("smooth", size = 1.5, alpha = 0.8)),
+          #散布図付き回帰線の散布図のドットサイズを1.5に，また透過率を0.8に
+          
+          upper = list(continuous = wrap("cor", size = 2)),
+          #相関係数の文字サイズを5に
+          
+          diag = list(continuous = wrap("densityDiag", alpha = 0.5))
+          #3種の密度図が重なるので，透過率0.5にして可視化
+          
+          ) + theme(axis.text= element_text(size=4),legend.title = element_text(size=7),legend.text = element_text(size=7),axis.title = element_text(size=7),plot.title= element_text(size=7),strip.text=element_text(size=7))
+sumres <- summary(res)
+```
+
+#パス解析
+```{r}
+model_Sanford <- '
+CMQ ~~ PBS
+EI ~~ PRB
+PRB ~~ BACE
+JPC ~~ CRT
+EI ~ JPC + CRT
+PRB ~ JPC + CRT
+BACE ~ JPC + CRT
+SRS ~ JPC + CRT + EI + PRB  + BACE
+CMQ ~ JPC + CRT + EI + PRB  + BACE + SRS
+PBS ~ JPC + CRT + EI + PRB  + BACE + SRS
+'
+# データの標準化
+Sanford_scaled <- scale(Sanford)  # Sanfordが元のデータセット
+
+# モデルを適合
+fit_model <- lavaan::sem(model_Sanford, data = Sanford_scaled, estimator = "WLSMV")
+
+# 結果を確認
+summary(fit_model, standardized = TRUE, fit.measure = TRUE)
+
+# パス解析図を生成
+lavaanPlot(model = fit_model, coefs = TRUE, sig = .05)  # 有意な関係のみパス係数を表示
+```
+
+#モデルの適合度を求める
+```{r}
+#install.packages('psych')
+library(psych)
+
+fitMeasures(fit_model, c("srmr", "cfi", "rmsea", "agfi", "ecvi"))
+summary(fit_model)
+```
