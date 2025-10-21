@@ -1,0 +1,858 @@
+---
+title: "analysis2_最終モデル"
+output: html_document
+date: "2025-09-28"
+---
+```{r}
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+#install.packages("pacman")
+library(pacman)
+library("GGally")  #ggpairsはここに収録
+library("ggthemes")
+library(easystats)
+library(ggeffects)
+library(MASS)
+library(lme4)
+library(lavaan)       # 構造方程式モデル用
+library(semPlot)      # パス図用
+library(lavaanPlot)   # パス図生成用
+library(AER)　#AERパッケージの読み込み。
+library(memisc) # memisicパッケージの読み込み。
+```
+
+```{r}
+# CSVデータを読み込み
+data_Expt2 <- read.csv("Experiment2.csv", header = TRUE, fileEncoding = "cp932")
+```
+
+#人口統計学的情報
+```{r}
+Expt2_table <- data_Expt2[, 12:15]
+
+Expt2_table <- Expt2_table %>%
+  mutate("年齢_変換後" = Expt2_table$年齢 + 16)
+
+Expt2_table <- Expt2_table[,-1]
+Expt2_table <- Expt2_table %>% dplyr::select(年齢_変換後, 性別, 学歴, 年収)
+```
+
+# 陰謀論心性：CMQ-J
+```{r}
+# データ抽出
+CMQ_table2 <- data_Expt2[,304:308]
+cognition <- data_Expt2[,304:308]
+
+# 個人ごとの平均スコア
+cmq_ave <- rowMeans(CMQ_table2, na.rm = TRUE)
+# データフレームに平均列追加
+CMQ_table2 <- cbind(CMQ_table2, cmq_ave)
+Expt2_table <- cbind(Expt2_table, cmq_ave)
+```
+
+# COVID-19陰謀論
+```{r}
+# データ抽出
+COVID19_table <- data_Expt2[,309:314]
+cognition <- cbind(cognition, data_Expt2[,309:314])
+
+# 個人ごとの平均スコア
+covid_ave <- rowMeans(COVID19_table, na.rm = TRUE)
+# データフレームに平均列追加
+COVID19_table <- cbind(COVID19_table, covid_ave)
+Expt2_table <- cbind(Expt2_table, covid_ave)
+```
+
+# 疑似科学信奉尺度：PBS（項目7だけ逆転項目）
+```{r}
+PBS <- data_Expt2[,315:333] %>%
+  mutate(疑似科学信奉尺度7_逆転 = case_when(
+    疑似科学_7 == 1 ~ 5,
+    疑似科学_7 == 2 ~ 4,
+    疑似科学_7 == 3 ~ 3,
+    疑似科学_7 == 4 ~ 2,
+    疑似科学_7 == 5 ~ 1
+  ))
+
+# 列名整理
+colnames(PBS) <- c(
+  paste0("疑似科学信奉尺度", 1:6),
+  paste0("疑似科学信奉尺度", 7:19),
+  "疑似科学信奉尺度7_逆転"
+)
+
+# 値反転前の7列目を削除して逆転列に置き換え
+PBS <- PBS[, -7]
+
+cognition <- cbind(cognition,PBS[, 1:19])
+# 個人ごとの平均スコア
+PBS_ave <- rowMeans(PBS, na.rm = TRUE)
+# データフレームに平均列追加
+PBS <- cbind(PBS, PBS_ave)
+Expt2_table <- cbind(Expt2_table, PBS_ave)
+```
+
+# 被害妄想：JPC（値を逆転処理）
+```{r}
+# 被害妄想データ抽出
+higai_table <- data_Expt2[, 346:363]
+
+# 値を逆転処理（1→5, 2→4, …）
+higai_table_rev <- as.data.frame(lapply(higai_table, function(x) {
+  case_when(
+    x == 1 ~ 5,
+    x == 2 ~ 4,
+    x == 3 ~ 3,
+    x == 4 ~ 2,
+    x == 5 ~ 1
+  )
+}))
+cognition <- cbind(cognition, higai_table_rev[, 1:18])
+# 個人ごとの平均
+higai_ave <- rowMeans(higai_table_rev, na.rm = TRUE)
+# データフレームに平均列追加
+higai_table_rev <- cbind(higai_table_rev, higai_ave)
+Expt2_table <- cbind(Expt2_table, higai_ave)
+```
+
+# 科学的推論：SRS
+```{r}
+suiron_table <- data_Expt2[, 334:345]
+
+# 正解/不正解を0,1に変換
+suiron_table <- suiron_table %>%
+  mutate(
+    suiron_1  = if_else(科学的推論_1  == 1, 1, 0),
+    suiron_2  = if_else(科学的推論_2  == 2, 1, 0),
+    suiron_3  = if_else(科学的推論_3  == 1, 1, 0),
+    suiron_4  = if_else(科学的推論_4  == 2, 1, 0),
+    suiron_5  = if_else(科学的推論_5  == 2, 1, 0),
+    suiron_6  = if_else(科学的推論_6  == 2, 1, 0),
+    suiron_7  = if_else(科学的推論_7  == 1, 1, 0),
+    suiron_8  = if_else(科学的推論_8  == 2, 1, 0),
+    suiron_9  = if_else(科学的推論_9  == 1, 1, 0),
+    suiron_10 = if_else(科学的推論_10 == 2, 1, 0),
+    suiron_11 = if_else(科学的推論_11 == 2, 1, 0),
+    suiron_12 = if_else(科学的推論_12 == 2, 1, 0)
+  )
+suiron_score <- suiron_table[, 13:24]
+cognition <- cbind(cognition,suiron_table[, 13:24])
+# 個人平均
+suiron_ave <- rowMeans(suiron_score, na.rm = TRUE)
+# データフレームに平均列追加
+suiron_score <- cbind(suiron_score, suiron_ave)
+Expt2_table <- cbind(Expt2_table, suiron_ave)
+```
+
+# CRT
+```{r}
+# CRTデータ抽出
+crt_table <- data_Expt2[, 364:366]
+
+# 正解/不正解を0,1に変換
+crt_table <- crt_table %>%
+  mutate(
+    crt_1 = if_else(CRT_1 == 50, 1, 0),
+    crt_2 = if_else(CRT_2 == 5, 1, 0),
+    crt_3 = if_else(CRT_3 == 47, 1, 0)
+  )
+
+# 正解列だけ抽出
+crt_score <- crt_table[, 4:6]
+cognition <- cbind(cognition,crt_table[, 4:6])
+# 個人平均
+crt_ave <- rowMeans(crt_score, na.rm = TRUE)
+# データフレームに平均列追加
+crt_score <- cbind(crt_score, crt_ave)
+Expt2_table <- cbind(Expt2_table, crt_ave)
+```
+
+# 群分け
+```{r}
+# 空データフレーム作成
+BADE <- data.frame()
+Emotional_BADE <- data.frame()
+BADE_group <- data.frame()
+Emotional_BADE_group <- data.frame()
+
+# ループで各行をチェック
+for (i in 1:nrow(data_Expt2)) {  
+  if (data_Expt2$BADE[i] == 1) {
+    # BADE課題のデータ
+    temp_row <- data_Expt2[i, 28:171, drop = FALSE]
+    Expt2_summary <- Expt2_table[i, 1:10, drop = FALSE]
+    BADE_temp <- cognition[i, 1:63, drop = FALSE]
+    
+    # 行単位でまとめて横結合
+    BADE <- rbind(BADE, temp_row)
+    BADE_group <- rbind(BADE_group, cbind(Expt2_summary, BADE_temp))
+    
+  } else if (data_Expt2$感情版BADE[i] == 1) {
+    # 感情的BADE課題のデータ
+    temp_row_E <- data_Expt2[i, 184:303, drop = FALSE]
+    Expt2_summary_E <- Expt2_table[i, 1:10, drop = FALSE]
+    EmotionalBADE_temp <- cognition[i, 1:63, drop = FALSE]
+    
+    # 行単位でまとめて横結合
+    Emotional_BADE <- rbind(Emotional_BADE, temp_row_E)
+    Emotional_BADE_group <- rbind(Emotional_BADE_group, cbind(Expt2_summary_E, EmotionalBADE_temp))
+  }
+}
+
+# 後処理のrm()は不要（オブジェクトがループ外で使われていないため）
+
+```
+
+# BADEの平均求める
+```{r}
+#シナリオ全体の各項目の平均を求める 1回目の解釈
+sum_12 <- numeric(nrow(BADE))  # ベクトルとして初期化
+mean_12 <- numeric(nrow(BADE)) # ベクトルとして初期化
+
+#NL1
+column_indices <- seq(1, ncol(BADE), by = 12)
+sum_12 <- numeric(nrow(BADE))  # ベクトルとして初期化
+mean_12 <- numeric(nrow(BADE)) # ベクトルとして初期化
+for (i in 1:nrow(BADE)) {
+  selected_values <- BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE$mean_NL1 <- (mean_12)
+
+#EL1
+column_indices <- seq(2, ncol(BADE), by = 12)
+for (i in 1:nrow(BADE)) {
+  selected_values <- BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE$mean_EL1 <- (mean_12)
+
+
+# Absurd1
+column_indices <- seq(3, ncol(BADE), by = 12)
+for (i in 1:nrow(BADE)) {
+  selected_values <- BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE$mean_Ab1 <- (mean_12)
+
+#Truth1
+column_indices <- seq(4, ncol(BADE), by = 12)
+for (i in 1:nrow(BADE)) {
+  selected_values <- BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE$mean_Tr1 <- (mean_12)
+
+#シナリオ全体の各項目の平均を求める 2回目の解釈
+sum_12 <- numeric(nrow(BADE))  # ベクトルとして初期化
+mean_12 <- numeric(nrow(BADE)) # ベクトルとして初期化
+
+
+#NL2
+column_indices <- seq(5, ncol(BADE), by = 12)
+
+for (i in 1:nrow(BADE)) {
+  selected_values <- BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE$mean_NL2 <- (mean_12)
+
+#EL2
+column_indices <- seq(6, ncol(BADE), by = 12)
+for (i in 1:nrow(BADE)) {
+  selected_values <- BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE$mean_EL2 <- (mean_12)
+
+# Absurd2
+column_indices <- seq(7, ncol(BADE), by = 12)
+for (i in 1:nrow(BADE)) {
+  selected_values <- BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE$mean_Ab2 <- (mean_12)
+
+#Truth2
+column_indices <- seq(8, ncol(BADE), by = 12)
+for (i in 1:nrow(BADE)) {
+  selected_values <- BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE$mean_Tr2 <- (mean_12)
+
+#シナリオ全体の各項目の平均を求める 3回目の解釈
+#NL3
+column_indices <- seq(9, ncol(BADE), by = 12)
+sum_12 <- numeric(nrow(BADE))  # ベクトルとして初期化
+mean_12 <- numeric(nrow(BADE)) # ベクトルとして初期化
+for (i in 1:nrow(BADE)) {
+  selected_values <- BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE$mean_NL3 <- (mean_12)
+
+
+#EL3
+column_indices <- seq(10, ncol(BADE), by = 12)
+for (i in 1:nrow(BADE)) {
+  selected_values <- BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE$mean_EL3 <- (mean_12)
+
+
+# Absurd3
+column_indices <- seq(11, ncol(BADE), by = 12)
+
+for (i in 1:nrow(BADE)) {
+  selected_values <- BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE$mean_Ab3 <- (mean_12)
+
+
+#Truth3
+column_indices <- seq(12, ncol(BADE), by = 12)
+for (i in 1:nrow(BADE)) {
+  selected_values <- BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+BADE$mean_Tr3 <- (mean_12)
+
+rm(selected_values)
+rm(temp_row)
+rm(temp_row_E)
+```
+
+# EI, PRB, BACE(BADE)
+```{r}
+EI <- (BADE$mean_Ab1 + BADE$mean_Ab2 + BADE$mean_Ab3 + BADE$mean_NL3 + BADE$mean_EL3) + ((BADE$mean_Tr3) * (-1))
+
+PRB <- (BADE$mean_NL1 + BADE$mean_NL2 + BADE$mean_EL1 + BADE$mean_EL2 + BADE$mean_Tr1 + BADE$mean_Tr2)
+BACE <- ((BADE$mean_Tr3) - (BADE$mean_Tr1))
+
+BADE <- cbind(BADE, EI)
+BADE <- cbind(BADE, PRB)
+BADE <- cbind(BADE, BACE)
+
+BADE_group <- cbind(BADE_group, EI)
+BADE_group <- cbind(BADE_group, PRB)
+BADE_group <- cbind(BADE_group, BACE)
+EI
+```
+
+# 感情版BADEの平均求める
+```{r}
+#シナリオ全体の各項目の平均を求める 1回目の解釈
+sum_12 <- numeric(nrow(Emotional_BADE))  # ベクトルとして初期化
+mean_12 <- numeric(nrow(Emotional_BADE)) # ベクトルとして初期化
+
+# Absurd1
+column_indices <- seq(1, ncol(Emotional_BADE), by = 12)
+for (i in 1:nrow(Emotional_BADE)) {
+  selected_values <- Emotional_BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+Emotional_BADE$mean_Ab1 <- (mean_12)
+
+#NL1
+column_indices <- seq(2, ncol(Emotional_BADE), by = 12)
+sum_12 <- numeric(nrow(Emotional_BADE))  # ベクトルとして初期化
+mean_12 <- numeric(nrow(Emotional_BADE)) # ベクトルとして初期化
+for (i in 1:nrow(Emotional_BADE)) {
+  selected_values <- Emotional_BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+Emotional_BADE$mean_NL1 <- (mean_12)
+
+#EL1
+column_indices <- seq(3, ncol(Emotional_BADE), by = 12)
+for (i in 1:nrow(Emotional_BADE)) {
+  selected_values <- Emotional_BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+Emotional_BADE$mean_EL1 <- (mean_12)
+
+#Truth1
+column_indices <- seq(4, ncol(Emotional_BADE), by = 12)
+for (i in 1:nrow(Emotional_BADE)) {
+  selected_values <- Emotional_BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+Emotional_BADE$mean_Tr1 <- (mean_12)
+
+
+#シナリオ全体の各項目の平均を求める 2回目の解釈
+sum_12 <- numeric(nrow(Emotional_BADE))  # ベクトルとして初期化
+mean_12 <- numeric(nrow(Emotional_BADE)) # ベクトルとして初期化
+
+# Absurd2
+column_indices <- seq(5, ncol(Emotional_BADE), by = 12)
+for (i in 1:nrow(Emotional_BADE)) {
+  selected_values <- Emotional_BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+Emotional_BADE$mean_Ab2 <- (mean_12)
+
+#NL2
+column_indices <- seq(6, ncol(Emotional_BADE), by = 12)
+
+for (i in 1:nrow(Emotional_BADE)) {
+  selected_values <- Emotional_BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+Emotional_BADE$mean_NL2 <- (mean_12)
+
+#EL2
+column_indices <- seq(7, ncol(Emotional_BADE), by = 12)
+for (i in 1:nrow(Emotional_BADE)) {
+  selected_values <- Emotional_BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+Emotional_BADE$mean_EL2 <- (mean_12)
+
+#Truth2
+column_indices <- seq(8, ncol(Emotional_BADE), by = 12)
+for (i in 1:nrow(Emotional_BADE)) {
+  selected_values <- Emotional_BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+Emotional_BADE$mean_Tr2 <- (mean_12)
+
+#シナリオ全体の各項目の平均を求める 3回目の解釈
+
+# Absurd3
+column_indices <- seq(9, ncol(Emotional_BADE), by = 12)
+
+for (i in 1:nrow(Emotional_BADE)) {
+  selected_values <- Emotional_BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+Emotional_BADE$mean_Ab3 <- (mean_12)
+
+#NL3
+column_indices <- seq(10, ncol(Emotional_BADE), by = 12)
+sum_12 <- numeric(nrow(Emotional_BADE))  # ベクトルとして初期化
+mean_12 <- numeric(nrow(Emotional_BADE)) # ベクトルとして初期化
+for (i in 1:nrow(Emotional_BADE)) {
+  selected_values <- Emotional_BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(numeric_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+Emotional_BADE$mean_NL3 <- (mean_12)
+
+
+#EL3
+column_indices <- seq(11, ncol(Emotional_BADE), by = 12)
+for (i in 1:nrow(Emotional_BADE)) {
+  selected_values <- Emotional_BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+Emotional_BADE$mean_EL3 <- (mean_12)
+
+#Truth3
+column_indices <- seq(12, ncol(Emotional_BADE), by = 12)
+for (i in 1:nrow(Emotional_BADE)) {
+  selected_values <- Emotional_BADE[i, column_indices]
+  numeric_values <- selected_values[sapply(selected_values, is.numeric) & !is.na(selected_values)]
+  sum_12[i] <- sum(selected_values, na.rm = TRUE)
+  mean_12[i] <- mean(numeric_values, na.rm = TRUE)
+}
+Emotional_BADE$mean_Tr3 <- (mean_12)
+
+rm(selected_values)
+```
+
+# EI, PRB, BACE(感情版BADE)
+```{r}
+EI <- (Emotional_BADE$mean_Ab1 + Emotional_BADE$mean_Ab2 + Emotional_BADE$mean_Ab3 + Emotional_BADE$mean_NL3 + Emotional_BADE$mean_EL3) + ((Emotional_BADE$mean_Tr3) * (-1))
+
+PRB <- Emotional_BADE$mean_NL1 + Emotional_BADE$mean_NL2 + Emotional_BADE$mean_EL1 + Emotional_BADE$mean_EL2 + Emotional_BADE$mean_Tr1 + Emotional_BADE$mean_Tr2
+
+BACE <- ((Emotional_BADE$mean_Tr3) - (Emotional_BADE$mean_Tr1))
+
+Emotional_BADE <- cbind(Emotional_BADE, EI)
+Emotional_BADE <- cbind(Emotional_BADE, PRB)
+Emotional_BADE <- cbind(Emotional_BADE, BACE)
+
+Emotional_BADE_group <- cbind(Emotional_BADE_group, EI)
+Emotional_BADE_group <- cbind(Emotional_BADE_group, PRB)
+Emotional_BADE_group <- cbind(Emotional_BADE_group, BACE)
+```
+
+# BADE群平均年齢・男女比
+```{r}
+#平均年齢
+age_ave <- mean(BADE_group[, 1])
+
+#年齢の標準偏差
+age_sd <- sd(BADE_group[, 1])
+
+#男女
+man <- sum(BADE_group[, 2] == 1)
+woman <- sum(BADE_group[, 2] == 2)
+other <- sum(BADE_group[, 2] == 3)
+age_ave
+age_sd
+man
+woman
+other
+```
+# BADE群の基礎統計量
+```{r}
+library(psych)
+results <- data.frame(
+  Scale = c("EI", "PRB", "BACE", "CMQ", "COVID-19", "PBS", "JPC", "SRS", "CRT"),
+  Mean = c(mean(BADE_group$EI, na.rm=TRUE),
+           mean(BADE_group$PRB, na.rm=TRUE),
+           mean(BADE_group$BACE, na.rm=TRUE),
+           mean(BADE_group$cmq_ave, na.rm=TRUE),
+           mean(BADE_group$covid_ave, na.rm=TRUE),
+           mean(BADE_group$PBS_ave, na.rm=TRUE),
+           mean(BADE_group$higai_ave, na.rm=TRUE),
+           mean(BADE_group$suiron_ave, na.rm=TRUE),
+           mean(BADE_group$crt_ave, na.rm=TRUE)
+           ),
+  SD   = c(sd(BADE_group$EI, na.rm=TRUE),
+           sd(BADE_group$PRB, na.rm=TRUE),
+           sd(BADE_group$BACE, na.rm=TRUE),
+           sd(BADE_group$cmq_ave, na.rm=TRUE),
+           sd(COVID19_table$covid_ave, na.rm=TRUE),
+           sd(BADE_group$PBS_ave, na.rm=TRUE),
+           sd(BADE_group$higai_ave, na.rm=TRUE),
+           sd(BADE_group$suiron_ave, na.rm=TRUE),
+           sd(BADE_group$crt_ave, na.rm=TRUE)
+           ),
+  Alpha = c(
+    alpha(BADE[, c("mean_Ab1", "mean_Ab2", "mean_Ab3", "mean_NL3", "mean_EL3")])$total$raw_alpha,
+    alpha(BADE[, c("mean_NL1", "mean_EL1")])$total$raw_alpha,
+    alpha(BADE[, c("mean_Tr1", "mean_Tr3")])$total$raw_alpha,
+    alpha(BADE_group[, 11:15])$total$raw_alpha,
+    alpha(BADE_group[, 16:21])$total$raw_alpha,
+    alpha(BADE_group[, 22:40])$total$raw_alpha,
+    alpha(BADE_group[, 41:58])$total$raw_alpha,
+    alpha(BADE_group[, 59:70])$total$raw_alpha,
+    alpha(BADE_group[, 71:73])$total$raw_alpha
+  )
+)
+
+results
+```
+
+# 感情的BADE群平均年齢・男女比
+```{r}
+#平均年齢
+age_ave <- mean(Emotional_BADE_group[, 1])
+
+#年齢の標準偏差
+age_sd <- sd(Emotional_BADE_group[, 1])
+
+#男女
+man <- sum(Emotional_BADE_group[, 2] == 1)
+woman <- sum(Emotional_BADE_group[, 2] == 2)
+other <- sum(Emotional_BADE_group[, 2] == 3)
+age_ave
+age_sd
+man
+woman
+other
+```
+
+# 感情的BADE群の基礎統計量
+```{r}
+library(psych)
+results <- data.frame(
+  Scale = c("EI", "PRB", "BACE", "CMQ", "COVID-19", "PBS", "JPC", "SRS", "CRT"),
+  Mean = c(mean(Emotional_BADE_group$EI, na.rm=TRUE),
+           mean(Emotional_BADE_group$PRB, na.rm=TRUE),
+           mean(Emotional_BADE_group$BACE, na.rm=TRUE),
+           mean(Emotional_BADE_group$cmq_ave, na.rm=TRUE),
+           mean(Emotional_BADE_group$covid_ave, na.rm=TRUE),
+           mean(PBS$PBS_ave, na.rm=TRUE),
+           mean(Emotional_BADE_group$higai_ave, na.rm=TRUE),
+           mean(Emotional_BADE_group$suiron_ave, na.rm=TRUE),
+           mean(Emotional_BADE_group$crt_ave, na.rm=TRUE)
+           ),
+  SD   = c(sd(Emotional_BADE_group$EI, na.rm=TRUE),
+           sd(Emotional_BADE_group$PRB, na.rm=TRUE),
+           sd(Emotional_BADE_group$BACE, na.rm=TRUE),
+           sd(Emotional_BADE_group$cmq_ave, na.rm=TRUE),
+           sd(Emotional_BADE_group$covid_ave, na.rm=TRUE),
+           sd(Emotional_BADE_group$PBS_ave, na.rm=TRUE),
+           sd(Emotional_BADE_group$higai_ave, na.rm=TRUE),
+           sd(Emotional_BADE_group$suiron_ave, na.rm=TRUE),
+           sd(Emotional_BADE_group$crt_ave, na.rm=TRUE)
+           ),
+  Alpha = c(
+    alpha(BADE[, c("mean_Ab1", "mean_Ab2", "mean_Ab3", "mean_NL3", "mean_EL3")])$total$raw_alpha,
+    alpha(BADE[, c("mean_NL1", "mean_EL1")])$total$raw_alpha,
+    alpha(BADE[, c("mean_Tr1", "mean_Tr3")])$total$raw_alpha,
+    alpha(Emotional_BADE_group[, 11:15])$total$raw_alpha,
+    alpha(Emotional_BADE_group[, 16:21])$total$raw_alpha,
+    alpha(Emotional_BADE_group[, 22:40])$total$raw_alpha,
+    alpha(Emotional_BADE_group[, 41:58])$total$raw_alpha,
+    alpha(Emotional_BADE_group[, 59:70])$total$raw_alpha,
+    alpha(Emotional_BADE_group[, 71:73])$total$raw_alpha
+  )
+)
+
+results
+```
+
+# BADE群相関分析
+```{r}
+BADE_correlation <- data.frame(
+  BADE_group[, 5:10],
+  BADE_group[, 74:76]
+)
+colnames(BADE_correlation)<- c("CMQ", "COVID", "PBS", "JPC", "SRS", "CRT", "EI", "PRB", "BACE")
+res_corr <-correlation::correlation(BADE_correlation, include_factors = TRUE,  na.rm = TRUE, digits = 3)
+summary(res_corr)
+
+graph <- ggpairs(BADE_correlation)
+p <- BADE_correlation %>% 
+      dplyr::select(CMQ, COVID, PBS, JPC, SRS, CRT, EI, PRB, BACE) %>% 
+      ggpairs(lower = list(continuous = wrap("smooth", size = 1.5, alpha = 0.8)),
+          #散布図付き回帰線の散布図のドットサイズを1.5に，また透過率を0.8に
+          
+          upper = list(continuous = wrap("cor", size = 2)),
+          #相関係数の文字サイズを5に
+          
+          diag = list(continuous = wrap("densityDiag", alpha = 0.5))
+          #3種の密度図が重なるので，透過率0.5にして可視化
+          
+          ) + theme(axis.text= element_text(size=4),legend.title = element_text(size=7),legend.text = element_text(size=7),axis.title = element_text(size=7),plot.title= element_text(size=7),strip.text=element_text(size=7))
+sumres <- summary(res_corr)
+```
+
+# 感情版相関分析
+```{r}
+Emotional_BADE_correlation <- data.frame(
+  Emotional_BADE_group[, 5:10],
+  Emotional_BADE_group[, 74:76]
+)
+colnames(Emotional_BADE_correlation)<- c("CMQ", "COVID", "PBS", "JPC", "SRS", "CRT", "EI", "PRB", "BACE")
+res_corr_E <-correlation::correlation(Emotional_BADE_correlation, include_factors = TRUE,  na.rm = TRUE, digits = 3)
+summary(res_corr_E)
+graph <- ggpairs(Emotional_BADE_correlation)
+p <- Emotional_BADE_correlation %>% 
+      dplyr::select(CMQ, COVID, PBS, JPC, SRS, CRT, EI, PRB, BACE) %>% 
+      ggpairs(lower = list(continuous = wrap("smooth", size = 1.5, alpha = 0.8)),
+          #散布図付き回帰線の散布図のドットサイズを1.5に，また透過率を0.8に
+          
+          upper = list(continuous = wrap("cor", size = 2)),
+          #相関係数の文字サイズを5に
+          
+          diag = list(continuous = wrap("densityDiag", alpha = 0.5))
+          #3種の密度図が重なるので，透過率0.5にして可視化
+          
+          ) + theme(axis.text= element_text(size=4),legend.title = element_text(size=7),legend.text = element_text(size=7),axis.title = element_text(size=7),plot.title= element_text(size=7),strip.text=element_text(size=7))
+sumres <- summary(res_corr_E)
+```
+
+# BADE パス解析（ベースモデル）
+```{r}
+model_BADE <- '
+CMQ ~~ PBS
+PBS ~~ COVID
+EI ~~ PRB
+PRB ~~ BACE
+JPC ~~ CRT
+EI ~ JPC + CRT
+PRB ~ JPC + CRT
+BACE ~ JPC + CRT
+SRS ~ JPC + PRB + EI + BACE + CRT
+CMQ ~ JPC + PRB + EI + BACE + CRT + SRS
+PBS ~ JPC + PRB + EI + BACE + CRT + SRS
+COVID ~ JPC + PRB + EI + BACE + CRT + SRS
+'
+# データの標準化
+BADE_scaled <- scale(BADE_correlation)  # BADE_correlationが元のデータセット
+
+# モデルを適合
+fit_BADE <- lavaan::sem(model_BADE, data = BADE_scaled, estimator = "WLSMV")
+
+# 結果を確認
+summary(fit_BADE, standardized = TRUE, fit.measure = TRUE)
+
+# パス解析図を生成
+lavaanPlot(model = fit_BADE, coefs = TRUE, sig = .05)  # 有意な関係のみを表示
+```
+
+# BADE パス解析モデルの適合度（ベースモデル）
+```{r}
+library(psych)
+
+fitMeasures(fit_BADE, c("srmr", "cfi", "rmsea", "agfi", "ecvi"))
+
+summary(fit_BADE)
+```
+
+# 感情版BADE パス解析（ベースモデル）
+```{r}
+model_Emotional_BADE <- '
+CMQ ~~ PBS
+PBS ~~ COVID
+EI ~~ PRB
+PRB ~~ BACE
+JPC ~~ CRT
+EI ~ JPC + CRT
+PRB ~ JPC + CRT
+BACE ~ JPC + CRT
+SRS ~ JPC + PRB + EI + BACE + CRT
+CMQ ~ JPC + PRB + EI + BACE + CRT + SRS
+PBS ~ JPC + PRB + EI + BACE + CRT + SRS
+COVID ~ JPC + PRB + EI + BACE + CRT + SRS
+'
+# データの標準化
+Emotional_BADE_scaled <- scale(Emotional_BADE_correlation)  # BADE_correlationが元のデータセット
+
+# モデルを適合
+fit_Emotional_BADE <- lavaan::sem(model_Emotional_BADE, data = Emotional_BADE_scaled, estimator = "WLSMV")
+
+# 結果を確認
+summary(fit_Emotional_BADE, standardized = TRUE, fit.measure = TRUE)
+
+# パス解析図を生成
+lavaanPlot(model = fit_Emotional_BADE, coefs = TRUE, sig = .05)  # 有意な関係のみを表示
+```
+
+# 感情版BADE パス解析モデルの適合度（ベースモデル）
+```{r}
+fitMeasures(fit_Emotional_BADE, c("srmr", "cfi", "rmsea", "agfi", "ecvi"))
+
+summary(fit_Emotional_BADE)
+```
+
+##########################################
+# BADE パス解析（改良モデル）
+```{r}
+model_BADE2 <- '
+## 相関
+CMQ ~~ COVID
+CMQ ~~ PBS
+COVID ~~ PBS
+EI  ~~ BACE
+EI  ~~ PRB
+BACE  ~~ PRB
+
+## 回帰
+EI   ~ JPC + CRT
+PRB  ~ JPC + CRT
+BACE ~ JPC + CRT
+SRS  ~ CRT   + PRB + EI
+CMQ  ~ SRS + PRB + JPC + CRT + EI
+PBS  ~ SRS + PRB +  CRT+ EI
+COVID ~ SRS + PRB + JPC + CRT+ EI
+'
+
+# データの標準化
+BADE_scaled <- scale(BADE_correlation)  # BADE_correlationが元のデータセット
+
+# モデルを適合
+fit_BADE2 <- lavaan::sem(model_BADE2, data = BADE_scaled, estimator = "WLSMV",
+                 auto.cov.y = FALSE)
+
+# 適合度
+fitMeasures(fit_BADE2, c("srmr", "cfi", "rmsea", "agfi", "ecvi"))
+
+summary(fit_BADE2, standardized = TRUE, fit.measure = TRUE)
+
+# 修正指標
+modificationindices(fit_BADE2, sort. = TRUE, maximum.number = 20)
+
+# パス解析図を生成
+lavaanPlot(model = fit_BADE2, coefs = TRUE, sig = .05)  # 有意な関係のみを表示
+
+
+```
+
+##########################################
+#  感情版BADE パス解析（改良モデル）
+```{r}
+model_Emotional_BADE2 <- '
+## 相関
+CMQ ~~ COVID
+CMQ ~~ PBS
+COVID ~~ PBS
+EI  ~~ BACE
+EI  ~~ PRB
+BACE  ~~ PRB
+
+## 回帰
+EI   ~ JPC + CRT
+PRB  ~ JPC + CRT
+BACE ~ JPC + CRT
+SRS  ~ CRT   + PRB + EI
+CMQ  ~ SRS + PRB + JPC + CRT + EI
+PBS  ~ SRS + PRB +  CRT+ EI
+COVID ~ SRS + PRB + JPC + CRT+ EI
+'
+
+# データの標準化
+Emotional_BADE_scaled <- scale(Emotional_BADE_correlation)  # BADE_correlationが元のデータセット
+
+# モデルを適合
+fit_Emotional_BADE2 <- lavaan::sem(model_Emotional_BADE2, data = Emotional_BADE_scaled, estimator = "WLSMV",
+                 auto.cov.y = FALSE)
+
+
+# パス解析図を生成
+lavaanPlot(model = fit_Emotional_BADE2, coefs = TRUE, sig = .05)  # 有意な関係のみを表示
+
+# 適合度
+fitMeasures(fit_Emotional_BADE2, c("srmr", "cfi", "rmsea", "agfi", "ecvi"))
+
+summary(fit_Emotional_BADE2, standardized = TRUE, fit.measure = TRUE)
+
+# 修正指標
+modificationindices(fit_Emotional_BADE2, sort. = TRUE, maximum.number = 20)
+```
